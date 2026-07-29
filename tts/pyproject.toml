@@ -1,0 +1,13 @@
+[project]
+name = "anki-tts-piper"
+version = "0.1.0"
+description = "Piper text-to-speech HTTP service"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+]
+
+[tool.uv]
+# Single-file app (app.py), not an installable package — only manage deps.
+package = false

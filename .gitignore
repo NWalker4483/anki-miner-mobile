@@ -1,0 +1,21 @@
+# Anki profile holds the AnkiWeb sync auth token — treat as a credential.
+/data/user1/
+/data/prefs21.db
+/data/addons21/
+
+# local data backups
+/data.bak-*/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# generated audio
+*.wav
+
+# secrets — API keys, never commit
+.env

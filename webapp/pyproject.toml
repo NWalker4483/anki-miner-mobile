@@ -1,0 +1,17 @@
+[project]
+name = "anki-ocr-webapp"
+version = "0.1.0"
+description = "OCR + TTS + Gemini web UI for the Anki pipeline"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "python-multipart==0.0.20",
+    "pillow==11.1.0",
+    "pytesseract==0.3.13",
+    "httpx==0.28.1",
+]
+
+[tool.uv]
+# Single-file app (app.py), not an installable package — only manage deps.
+package = false
