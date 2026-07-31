@@ -4,10 +4,12 @@ Headless [Anki](https://apps.ankiweb.net/) in Docker with the
 [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on, plus a small
 web app for **OCR**, **text-to-speech**, and a **Gemini** chat box.
 
-**Long-term goal:** photograph text → OCR it → translate it → generate Anki
-cards, all against a containerized Anki that syncs to your AnkiWeb account.
-**Today:** the three building blocks (OCR, TTS, Gemini) work independently and
-the container syncs to AnkiWeb. The OCR→translate→card *chain* is not built yet.
+**The main flow — Screenshot → Anki — is built:** drop an image, Gemini reads
+it and pulls out the Mandarin vocabulary, the app checks which words are already
+in your deck, Gemini drafts cards for the new ones (using words you already know
+in its example sentences), you edit/select, and they're added to Anki and synced
+to AnkiWeb. Standalone OCR (Tesseract), TTS (Piper), and a plain Gemini chat
+endpoint also remain available.
 
 ## Services
 
@@ -36,9 +38,10 @@ is published as **8766**, because the local Anki desktop app already owns 8765.
 ├── .env                  # GEMINI_API_KEY / GEMINI_MODEL (gitignored)
 ├── anki/
 │   └── Dockerfile        # bakes AnkiConnect in; env-governed 0.0.0.0 bind; no auto-update
-├── webapp/               # FastAPI UI, proxies to anki + tts + Gemini
+├── webapp/               # FastAPI UI + Screenshot→Anki pipeline
 │   ├── Dockerfile        # python:3.12-slim + Tesseract (eng, chi_sim, chi_tra); deps via uv
-│   ├── app.py
+│   ├── app.py            # routes, AnkiConnect calls, the UI
+│   ├── pipeline.py       # Pydantic contracts + Gemini calls (google-genai SDK)
 │   ├── pyproject.toml    # deps (managed by uv)
 │   └── uv.lock
 ├── tts/                  # Piper TTS service (no torch)
@@ -121,6 +124,37 @@ email/password, so you log in through the UI once per running container:
 > testing. A real fix would need a clean-quit-on-stop mechanism (e.g. a wrapper
 > that closes the Anki window on SIGTERM with an increased `stop_grace_period`),
 > which was deliberately deferred.
+
+## Screenshot → Anki pipeline (the main feature)
+
+The home page (`/`) is a "Screenshot → Anki" workflow. Every LLM interaction
+uses JSON structured output whose schema is a **Pydantic model** passed to the
+`google-genai` SDK as `response_schema` (see `webapp/pipeline.py`).
+
+Four stages:
+
+1. **Analyze** — `POST /api/analyze` (image) → Gemini (multimodal) →
+   `ImageAnalysis{ description, terms: [MandarinTerm{hanzi, pinyin, meaning}] }`.
+   The UI fills the editable "Mandarin terms" box from this.
+2. **Deck search** — inside `POST /api/generate`: for each term, AnkiConnect
+   `findNotes` splits them into *already in the deck* vs *new*, and samples up to
+   30 existing cards as "vocabulary the learner already knows".
+3. **Generate** — `POST /api/generate` (`deck`, `words`) → Gemini →
+   `GeneratedCards{ cards: [GeneratedCard{simplified, traditional, pinyin,
+   meaning, part_of_speech, example, example_pinyin, example_meaning}] }`,
+   prompted to build example sentences that lean on the known vocabulary and to
+   only make cards for the new words.
+4. **Add** — `POST /api/add-cards` (`deck`, `cards` JSON) → for each card,
+   synthesize **word + sentence audio** via the `tts` service and store it in
+   Anki's media (`storeMediaFile`), then `addNotes` and `sync`.
+
+Cards are added as the **HSK note type** (matching the user's HSK1 deck): big
+`Simplified`, `Pinyin.1`, `Meaning`, `Part of speech`, the example in
+`SentenceSimplified` (target word bolded) with `SentencePinyin.1` /
+`SentenceMeaning`, and `Audio` / `SentenceAudio` `[sound:…]` from Piper. The
+note type is `CARD_MODEL` (default `HSK`); duplicates are skipped and sync
+failures are reported, not fatal. Gemini model is `GEMINI_MODEL` (default
+`gemini-3.5-flash-lite`), used for both vision and generation.
 
 ## Feature notes
 

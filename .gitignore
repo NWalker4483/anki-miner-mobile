@@ -6,6 +6,9 @@
 # local data backups
 /data.bak-*/
 
+# Anki writes per-addon state here at runtime for the mounted add-on
+/anki/addons/headless_autologin/meta.json
+
 # macOS
 .DS_Store
 

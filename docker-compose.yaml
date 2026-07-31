@@ -15,6 +15,17 @@ services:
       # through the published host port. See anki/Dockerfile for why config.json
       # is not used for this.
       ANKICONNECT_BIND_ADDRESS: "0.0.0.0"
+      # Consumed by the headless_autologin add-on (see anki/addons/). Credentials
+      # come from the gitignored .env; the add-on re-establishes the AnkiWeb login
+      # on every boot (Anki only flushes the token on a clean shutdown, which
+      # never happens in-container) and resolves sync conflicts without a dialog.
+      ANKIWEB_USERNAME: "${ANKIWEB_USERNAME:-}"
+      ANKIWEB_PASSWORD: "${ANKIWEB_PASSWORD:-}"
+      # On an ambiguous "conflicting collection": download = AnkiWeb wins (default),
+      # upload = the container's local collection wins (overwrites AnkiWeb).
+      ANKIWEB_SYNC_ON_CONFLICT: "${ANKIWEB_SYNC_ON_CONFLICT:-download}"
+      # Run one sync at boot to reconcile after a restart (1 = on).
+      ANKIWEB_SYNC_ON_START: "${ANKIWEB_SYNC_ON_START:-1}"
     volumes:
       # The base image declares VOLUME /data. Everything under /data lives in a
       # *named* volume (managed, resettable via `docker volume rm`).
@@ -28,6 +39,10 @@ services:
       # (rename works inside a bind-mounted dir).
       - anki_data:/data
       - "./data/user1:/data/User 1"
+      # Headless auto-login / non-interactive-sync add-on, injected without a
+      # rebuild. Overlays this one subpath of the /data named volume; AnkiConnect
+      # (installed into the image at build) still lives in the volume alongside it.
+      - "./anki/addons/headless_autologin:/data/addons21/headless_autologin"
     ports:
       # Loopback-only. Host 8766 -> container 8765 because the local Anki
       # desktop app already holds 8765 on the host.
@@ -50,7 +65,7 @@ services:
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
     ports:
-      - "127.0.0.1:8000:8000"   # web UI (loopback-only)
+      - "0.0.0.0:8000:8000"     # web UI, exposed on the LAN (no auth — trusted networks only)
     depends_on:
       - anki
       - tts
