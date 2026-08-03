@@ -332,6 +332,12 @@ def chat(text: str = Form(...)):
     return {"model": GEMINI_MODEL, "reply": reply}
 
 
+@app.get("/manifest.json")
+def manifest():
+    with open("manifest.json", "r") as f:
+        return json.load(f)
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     return INDEX_HTML
@@ -344,6 +350,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json">
 <title>Screenshot → Anki</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin" />

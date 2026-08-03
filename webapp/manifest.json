@@ -1,0 +1,8 @@
+{
+  "name": "Screenshot → Anki",
+  "short_name": "AnkiMiner",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1ec",
+  "theme_color": "#f4f1ec"
+}

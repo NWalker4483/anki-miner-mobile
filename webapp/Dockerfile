@@ -20,7 +20,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # cedict_ts.u8 is the bundled CC-CEDICT dictionary (grounds card generation).
-COPY app.py pipeline.py cedict.py cedict_ts.u8 ./
+COPY app.py pipeline.py cedict.py cedict_ts.u8 manifest.json ./
 
 # Put the project venv on PATH so `uvicorn` resolves to it.
 ENV PATH="/app/.venv/bin:$PATH"
