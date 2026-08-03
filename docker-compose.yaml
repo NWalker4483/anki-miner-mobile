@@ -5,50 +5,25 @@ services:
       args:
         ADDON_IDS: "2055492159"
     image: headless-anki:addons-v1.4.0
-    # Clear stale X locks before the image's startup. Without this, /tmp survives
-    # a `docker restart` and the leftover /tmp/.X99-lock makes Xvnc refuse to
-    # start ("display 99 already active"), leaving VNC/GUI dead.
-    command: ["/bin/sh", "-c", "rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null; exec /startup.sh"]
+    command: [
+      "/bin/sh",
+      "-c",
+      "echo 'DEBUG: Checking config file...'; if [ -f /data/addons21/2055492159/config.json ]; then echo 'DEBUG: Found, patching...'; jq '.webBindAddress = \"0.0.0.0\"' /data/addons21/2055492159/config.json > /tmp/config.json && mv /tmp/config.json /data/addons21/2055492159/config.json; echo 'DEBUG: Patch complete.'; else echo 'DEBUG: Config not found.'; fi; rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null; exec /startup.sh"
+    ]
     environment:
-      # AnkiConnect (this fork) reads its bind address from this env var via
-      # DEFAULT_CONFIG. 0.0.0.0 makes it reachable from other containers and
-      # through the published host port. See anki/Dockerfile for why config.json
-      # is not used for this.
       ANKICONNECT_BIND_ADDRESS: "0.0.0.0"
-      # Consumed by the headless_autologin add-on (see anki/addons/). Credentials
-      # come from the gitignored .env; the add-on re-establishes the AnkiWeb login
-      # on every boot (Anki only flushes the token on a clean shutdown, which
-      # never happens in-container) and resolves sync conflicts without a dialog.
       ANKIWEB_USERNAME: "${ANKIWEB_USERNAME:-}"
       ANKIWEB_PASSWORD: "${ANKIWEB_PASSWORD:-}"
-      # On an ambiguous "conflicting collection": download = AnkiWeb wins (default),
-      # upload = the container's local collection wins (overwrites AnkiWeb).
       ANKIWEB_SYNC_ON_CONFLICT: "${ANKIWEB_SYNC_ON_CONFLICT:-download}"
-      # Run one sync at boot to reconcile after a restart (1 = on).
       ANKIWEB_SYNC_ON_START: "${ANKIWEB_SYNC_ON_START:-1}"
     volumes:
-      # The base image declares VOLUME /data. Everything under /data lives in a
-      # *named* volume (managed, resettable via `docker volume rm`).
-      #
-      # prefs21.db (which holds the AnkiWeb sync token) must NOT be a single-file
-      # bind mount: Anki saves the profile via write-temp-then-rename, and that
-      # rename cannot replace a bind-mounted file, so the login is lost on
-      # restart. Keeping it in the named volume lets atomic writes persist.
-      #
-      # The collection stays host-visible for backup via a *directory* bind
-      # (rename works inside a bind-mounted dir).
       - anki_data:/data
       - "./data/user1:/data/User 1"
-      # Headless auto-login / non-interactive-sync add-on, injected without a
-      # rebuild. Overlays this one subpath of the /data named volume; AnkiConnect
-      # (installed into the image at build) still lives in the volume alongside it.
-      - "./anki/addons/headless_autologin:/data/addons21/headless_autologin"
+      - "./anki/addons:/data/addons21"
     ports:
-      # Loopback-only. Host 8766 -> container 8765 because the local Anki
-      # desktop app already holds 8765 on the host.
-      - "127.0.0.1:5900:5900"   # VNC (one-time AnkiWeb login via the UI)
-      - "127.0.0.1:8766:8765"   # AnkiConnect
-      - "127.0.0.1:3141:3141"   # Anki MCP Server
+      - "127.0.0.1:5900:5900"
+      - "127.0.0.1:8766:8765"
+      - "127.0.0.1:3141:3141"
     restart: unless-stopped
 
   webapp:
@@ -56,16 +31,13 @@ services:
       context: ./webapp
     image: anki-ocr-webapp:dev
     environment:
-      # Container-to-container: reach services by name on their *container*
-      # ports (host remaps do not apply inside the network).
       ANKICONNECT_URL: "http://anki:8765"
       TTS_URL: "http://tts:8080"
       OCR_LANG: "chi_sim+eng"
-      # Populated by compose from the gitignored .env file.
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
     ports:
-      - "0.0.0.0:8000:8000"     # web UI, exposed on the LAN (no auth — trusted networks only)
+      - "0.0.0.0:8000:8000"
     depends_on:
       - anki
       - tts
@@ -76,8 +48,18 @@ services:
       context: ./tts
     image: anki-tts-piper:dev
     ports:
-      - "127.0.0.1:8082:8080"   # Piper TTS (loopback-only; handy for debugging)
+      - "127.0.0.1:8082:8080"
     restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      - webapp
+    environment:
+      # Explicitly set the log level to debug to see why requests might be failing
+      - TUNNEL_LOG_LEVEL=debug
 
 volumes:
   anki_data:

@@ -1,16 +1,4 @@
-"""Screenshot → Anki web app.
-
-Pipeline (all LLM I/O is JSON validated by Pydantic models — see pipeline.py):
-  1. /api/analyze   image -> Gemini -> {description, terms[]}
-  2. deck search    AnkiConnect: split terms into already-in-deck vs new,
-                    plus a sample of known vocab (done inside /api/generate)
-  3. /api/generate  new terms + known vocab -> Gemini -> {cards[]}
-  4. /api/add-cards selected cards -> AnkiConnect addNotes + sync
-
-Also keeps standalone OCR (Tesseract), TTS (Piper proxy), and a plain Gemini
-chat endpoint. AnkiConnect is called server-side; inside the compose network the
-Anki service is reachable by name on its *container* port 8765.
-"""
+import logging
 import base64
 import hashlib
 import io
@@ -26,6 +14,9 @@ from PIL import Image
 
 import cedict
 import pipeline
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 ANKICONNECT_URL = os.environ.get("ANKICONNECT_URL", "http://anki:8765")
 TTS_URL = os.environ.get("TTS_URL", "http://tts:8080")
@@ -48,6 +39,7 @@ app = FastAPI(title="Screenshot → Anki")
 
 def anki_request(action: str, **params):
     """Call AnkiConnect. Raises loudly on transport or API error."""
+    logger.info(f"AnkiConnect request: {action} to {ANKICONNECT_URL}")
     payload = {"action": action, "version": 6, "params": params}
     try:
         resp = httpx.post(ANKICONNECT_URL, json=payload, timeout=15.0)
@@ -57,7 +49,12 @@ def anki_request(action: str, **params):
     body = resp.json()
     if body.get("error") is not None:
         raise HTTPException(status_code=502, detail=f"AnkiConnect error: {body['error']}")
-    return body["result"]
+    
+    result = body["result"]
+    if action == "deckNames":
+        logger.info(f"Available decks: {result}")
+        
+    return result
 
 
 def _strip_html(s: str) -> str:

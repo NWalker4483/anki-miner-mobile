@@ -227,17 +227,17 @@ vision and generation.
 ## Implementation gotchas (why the config looks the way it does)
 
 - **AnkiConnect bind address** — AnkiConnect defaults to `127.0.0.1`, unreachable
-  from other containers or the host port. It is made to bind `0.0.0.0` via the
-  **`ANKICONNECT_BIND_ADDRESS=0.0.0.0`** env var (this fork reads it in its
-  `DEFAULT_CONFIG`). `anki/Dockerfile` **deletes** `webBindAddress` from
-  `config.json` (so the env var wins) and **disables addon auto-update**
-  (`meta.json` → `update_enabled:false`, so Anki can't re-download AnkiConnect
-  and reset the config). Hardcoding `0.0.0.0` in `config.json` was unreliable
-  because `/data` is a Docker volume that shadows/rewrites it.
-- **Stale X lock on restart** — the base image keeps `/tmp` across a
-  `docker restart`, and a leftover `/tmp/.X99-lock` makes Xvnc refuse to start
-  ("display 99 already active"), killing VNC. The `anki` service `command:`
-  clears `/tmp/.X99-lock` before running `/startup.sh`, so restarts stay clean.
+  from other containers or the host port. The container now **self-heals** this
+  configuration: every time the `anki` container starts, a `docker-compose.yaml`
+  command uses `jq` to enforce `webBindAddress: "0.0.0.0"` and whitelist the
+  webapp's origin in `config.json` inside the container. This persists across 
+  restarts and ensures the service is reachable even if the config file is 
+  reset by the add-on.
+- **Add-on loading** — The `anki` container expects all add-ons to reside in
+  `./anki/addons/` on the host, which is bind-mounted to `/data/addons21/` in the
+  container. This ensures add-ons like AnkiConnect (ID 2055492159) are loaded
+  correctly and are persistent. AnkiConnect's `auto-update` is explicitly
+  disabled in `meta.json` to prevent it from overwriting the patched `config.json`.
 - **Named volume for `/data`** — the base image declares `VOLUME /data`. Using a
   *named* volume (`anki_data`) instead of an anonymous one makes it managed and
   resettable (`docker volume rm anki-headless-docker_anki_data`).
