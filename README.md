@@ -207,5 +207,13 @@ failures are reported, not fatal. Gemini model is `GEMINI_MODEL` (default
 - The upstream Anki image serves VNC with **no authentication** — that's why
   every port is loopback-bound. Do not publish these ports to `0.0.0.0` or
   forward them through a router without adding auth first.
-- This project is **not yet a git repo** (`git init` when ready). `.gitignore`
-  is already in place, so `.env` and `data/` won't be staged once it is.
+- `.gitignore` keeps `.env` (Gemini key, AnkiWeb creds) and `data/` out of git.
+
+## License
+
+This project is licensed under the **GNU Affero General Public License v3.0** —
+see [LICENSE](LICENSE). AGPL is used because the bundled Anki add-on runs against
+Anki, which is itself AGPL-licensed.
+
+The bundled dictionary `webapp/cedict_ts.u8` is **CC-CEDICT**, licensed
+**CC BY-SA 4.0** by MDBG (license header preserved at the top of the file).
